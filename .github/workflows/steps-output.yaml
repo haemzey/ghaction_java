@@ -195,3 +195,6 @@ jobs:
 
             - name: docker image push 
               run: docker push ${{ needs.flask-docker-build.outputs.IMAGE_NAME }}
+
+            - name: image deployment done to docker
+              run: echo "image deployment done to docker"
