@@ -79,13 +79,13 @@ jobs:
           env:
               GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-        - name: tag
+        - name: tag_1
           id: tag_1
-          run: echo "SERVER_TAG=v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "GITHUB_OUTPUT"
+          run: echo "SERVER_TAG=v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-        - name: tag
+        - name: tag_2
           id: tag_2
-          run: echo "DB_TAG=v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "GITHUB_OUTPUT"
+          run: echo "DB_TAG=v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
         - name: docker build for server
           uses: docker/build-push-action@v7
