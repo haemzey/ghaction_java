@@ -146,7 +146,7 @@ jobs:
               scan-ref: ./server/Dockerfile
               format: "table"
               ignore-unfixed: "true"
-              vuln-type: "os.library"
+              vuln-type: "os,library"
               scanners: "secrets"
               severity: "CRITICAL"
               exit-code: "1"
@@ -158,7 +158,7 @@ jobs:
               scan-ref: ./db/Dockerfile
               format: "table"
               ignore-unfixed: "true"
-              vuln-type: "os.library"
+              vuln-type: "os,library"
               scanners: "secrets"
               severity: "CRITICAL"
               exit-code: "1"
@@ -169,7 +169,7 @@ jobs:
               image-ref: ${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}
               format: "table"
               ignore-unfixed: "true"
-              vuln-type: "os.library"
+              vuln-type: "os,library"
               scanners: "vuln"
               severity: "CRITICAL"
               exit-code: "1"
@@ -180,7 +180,7 @@ jobs:
               image-ref: ${{ needs.flask-docker-build.outputs.DB_IMAGE }}
               format: "table"
               ignore-unfixed: "true"
-              vuln-type: "os.library"
+              vuln-type: "os,library"
               scanners: "vuln"
               severity: "CRITICAL"
               exit-code: "1"
