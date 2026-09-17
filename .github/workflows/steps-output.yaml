@@ -92,7 +92,7 @@ jobs:
           with:
               context: ./server
               file: ./server/Dockerfile
-              no-cache: true
+           #  no-cache: true
               tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.SERVER_IMAGE }}:${{ steps.tag_1.outputs.SERVER_TAG }}
               push: false
               load: true
@@ -102,7 +102,7 @@ jobs:
           with:
               context: ./db
               file: ./db/Dockerfile
-              no-cache: true
+           #  no-cache: true
               tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.DB_IMAGE }}:${{ steps.tag_2.outputs.DB_TAG }}
               push: false
               load: true
@@ -113,7 +113,7 @@ jobs:
 
         - id: image_2
           run: echo "DB_IMAGE=${{ secrets.DOCKER_USERNAME }}/${{ env.DB_IMAGE }}:${{ steps.tag_2.outputs.DB_TAG }}" >> "$GITHUB_OUTPUT"
-        - run: "${{ steps.image_2.outputs.DB_IMAGE }}"
+        - run: echo "${{ steps.image_2.outputs.DB_IMAGE }}"
     
     flask-docker-security:
        needs: flask-docker-build
