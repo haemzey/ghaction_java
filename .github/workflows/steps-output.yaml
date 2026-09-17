@@ -147,7 +147,7 @@ jobs:
               format: "table"
               ignore-unfixed: "true"
               vuln-type: "os,library"
-              scanners: "secrets"
+              scanners: "secret"
               severity: "CRITICAL"
               exit-code: "1"
 
@@ -159,7 +159,7 @@ jobs:
               format: "table"
               ignore-unfixed: "true"
               vuln-type: "os,library"
-              scanners: "secrets"
+              scanners: "secret"
               severity: "CRITICAL"
               exit-code: "1"
 
