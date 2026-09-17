@@ -58,11 +58,10 @@ env:
 jobs:
     flask-docker-build:
        runs-on: ubuntu-latest
-       if: ${{ inputs.environments != 'prod'}}
        outputs:
             IMAGE_NAME: ${{ steps.image.outputs.IMAGE_NAME }}
        steps:
-        - name: caaling Inputs
+        - name: caling Inputs
           run: |
               echo "my environments are: ${{ inputs.environments }}
               echo "my security are: ${{ inputs.security_scans }}
@@ -83,7 +82,6 @@ jobs:
           run: echo "IMAGE_TAG=v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "GITHUB_OUTPUT"
 
         - name: docker build 
-          if: ${{ inputs.environments != 'prod'}}
           uses: docker/build-push-action@v7
           with:
               context: .
@@ -98,7 +96,7 @@ jobs:
     flask-docker-security:
        needs: flask-docker-build
        runs-on: ubuntu-latest
-       if: ${{ inputs.environments == 'prod' && inputs. security_scans == true }}
+       if: ${{ inputs.environments != 'dev' && inputs. security_scans == true }}
        steps:
         - name: caaling Inputs
           run: |
