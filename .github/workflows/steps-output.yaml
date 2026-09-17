@@ -132,11 +132,11 @@ jobs:
 
         - name: output of server image
           id: image_1
-          run: echo "${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}"
+          run: echo "${{ needs['flask-docker-build'].outputs.SERVER_IMAGE }}"
             
         - name: output of db image
           id: image_2
-          run: echo "${{ needs.flask-docker-build.outputs.DB_IMAGE }}"
+          run: echo "${{ needs['flask-docker-build'].outputs.DB_IMAGE }}"
           
 
         - name: server image scan secret security
@@ -166,7 +166,7 @@ jobs:
         - name: server image vuln scan 
           uses: aquasecurity/trivy-action@v0.36.0
           with:
-              image-ref: ${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}
+              image-ref: ${{ needs['flask-docker-build'].outputs.SERVER_IMAGE }}
               format: "table"
               ignore-unfixed: "true"
               vuln-type: "os,library"
@@ -177,7 +177,7 @@ jobs:
         - name: db image vuln scan 
           uses: aquasecurity/trivy-action@v0.36.0
           with:
-              image-ref: ${{ needs.flask-docker-build.outputs.DB_IMAGE }}
+              image-ref: ${{ needs['flask-docker-build'].outputs.DB_IMAGE }}
               format: "table"
               ignore-unfixed: "true"
               vuln-type: "os,library"
@@ -200,30 +200,30 @@ jobs:
 
             - name: server output of previous job
               id: image_1
-              run: echo "${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}"
+              run: echo "${{ needs['flask-docker-build'].outputs.SERVER_IMAGE }}"
 
             - name: db output of previous job
               id: image_2
-              run: echo "${{ needs.flask-docker-build.outputs.DB_IMAGE }}"
+              run: echo "${{ needs['flask-docker-build'].outputs.DB_IMAGE }}"
 
             - name: server image validation
               shell: bash
               run: |
-                  if [[ -z "${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}" ]]; then
+                  if [[ -z "${{ needs['flask-docker-build'].outputs.SERVER_IMAGE }}" ]]; then
                   echo "image not present, and is required"
                   exit 1
                   else
-                  echo "image present; "${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}"
+                  echo "image present; "${{ needs['flask-docker-build'].outputs.SERVER_IMAGE }}"
                   fi
 
             - name: db image validation
               shell: bash
               run: |
-                  if [[ -z "${{ needs.flask-docker-build.outputs.DB_IMAGE }}" ]]; then
+                  if [[ -z "${{ needs['flask-docker-build'].outputs.DB_IMAGE }}" ]]; then
                   echo "image not present, and is required"
                   exit 1
                   else
-                  echo "image present; "${{ needs.flask-docker-build.outputs.DB_IMAGE }}"
+                  echo "image present; "${{ needs['flask-docker-build'].outputs.DB_IMAGE }}"
                   fi
 
             - name: docker network
@@ -234,7 +234,7 @@ jobs:
                   docker run -d -p 5000:5000 \
                   --network mynetworks \
                   --name myserver \
-                  ${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}
+                  ${{ needs['flask-docker-build'].outputs.SERVER_IMAGE }}
 
             - name: server container smoke test
               run: |
@@ -246,7 +246,7 @@ jobs:
                   docker run -d -p 27017:27017 \
                   --network mynetworks \
                   --name mydb \
-                  ${{ needs.flask-docker-build.outputs.DB_IMAGE }}
+                  ${{ needs['flask-docker-build'].outputs.DB_IMAGE }}
 
             - name: server container smoke test
               run: |
@@ -275,7 +275,7 @@ jobs:
                   password: ${{ secrets.DOCKER_TOKEN }}
 
             - name: server image push 
-              run: docker push ${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}
+              run: docker push ${{ needs['flask-docker-build'].outputs.SERVER_IMAGE }}
 
             - name: db image push 
-              run: docker push ${{ needs.flask-docker-build.outputs.DB_IMAGE }}
+              run: docker push ${{ needs['flask-docker-build'].outputs.DB_IMAGE }}
