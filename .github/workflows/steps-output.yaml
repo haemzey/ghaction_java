@@ -145,7 +145,7 @@ jobs:
         runs-on: ubuntu-latest
         if: ${{ inputs.environments == 'prod' && inputs.smoke-test == true}}
         steps: 
-            - name: caaling Inputs
+            - name: calling Inputs
               run: |
                   echo "my environments are: ${{ inputs.environments }}
                   echo "my security are: ${{ inputs.security_scans }} 
@@ -195,6 +195,3 @@ jobs:
 
             - name: docker image push 
               run: docker push ${{ needs.flask-docker-build.outputs.IMAGE_NAME }}
-
-            - name: image deployment done to docker
-              run: echo "image deployment done to docker"
