@@ -109,12 +109,12 @@ jobs:
 
         - id: image_1
           run: echo "SERVER_IMAGE=${{ secrets.DOCKER_USERNAME }}/${{ env.SERVER_IMAGE }}:${{ steps.tag_1.outputs.SERVER_TAG }}" >> "$GITHUB_OUTPUT"
-        - run: ${{ steps.image_1.outputs.SERVER_IMAGE }}
+        - run: echo "${{ steps.image_1.outputs.SERVER_IMAGE }}"
 
         - id: image_2
           run: echo "DB_IMAGE=${{ secrets.DOCKER_USERNAME }}/${{ env.DB_IMAGE }}:${{ steps.tag_2.outputs.DB_TAG }}" >> "$GITHUB_OUTPUT"
-        - run: ${{ steps.image_2.outputs.DB_IMAGE }}
-
+        - run: "${{ steps.image_2.outputs.DB_IMAGE }}"
+    
     flask-docker-security:
        needs: flask-docker-build
        runs-on: ubuntu-latest
