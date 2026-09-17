@@ -18,7 +18,7 @@ on:
                 default: false
                 type: boolean
 
-            smoke-test:
+            smoke_test:
                 description: deployment
                 required: true
                 type: boolean
@@ -34,38 +34,40 @@ on:
         branches:
             - main
         paths:
-            - "**.py"
-            - "test/*"
+            - "server/**"
+            - "db/**"
             - "Dockerfile"
-            - "requirements.txt"
+            - "docker-compose.yaml"
 
     push:
         branches:
             - main
         paths:
-            - "**.py"
-            - "test/*"
+            - "server/**"
+            - "db/**"
             - "Dockerfile"
-            - "requirements.txt"
+            - "docker-compose.yaml"
             
 permissions: 
     contents: read
     pull-requests: read
 
 env:
-    IMAGE_NAME: java_workflow
+    SERVER_IMAGE: myjava
+    DB_IMAGE: mymongo
 
 jobs:
     flask-docker-build:
        runs-on: ubuntu-latest
+       if: ${{ inputs.environments != 'prod' }}
        outputs:
-            IMAGE_NAME: ${{ steps.image.outputs.IMAGE_NAME }}
+            SERVER_IMAGE: ${{ steps.image_1.outputs.SERVER_IMAGE }}
+            DB_IMAGE: ${{ steps.image_2.outputs.DB_IMAGE }} 
        steps:
         - name: caling Inputs
           run: |
               echo "my environments are: ${{ inputs.environments }}
               echo "my security are: ${{ inputs.security_scans }}
-              echo "my smoke test are: ${{ inputs.smoke-test }} 
 
         - name: check repo
           uses: actions/checkout@v7
@@ -78,46 +80,70 @@ jobs:
               GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
         - name: tag
-          id: tag
-          run: echo "IMAGE_TAG=v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "GITHUB_OUTPUT"
+          id: tag_1
+          run: echo "SERVER_TAG=v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "GITHUB_OUTPUT"
 
-        - name: docker build 
+        - name: tag
+          id: tag_2
+          run: echo "DB_TAG=v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "GITHUB_OUTPUT"
+
+        - name: docker build for server
           uses: docker/build-push-action@v7
           with:
-              context: .
+              context: ./server
+              file: ./server/Dockerfile
               no-cache: true
-              tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.IMAGE_TAG }}
+              tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.SERVER_IMAGE }}:${{ steps.tag_1.outputs.SERVER_TAG }}
               push: false
+              load: true
 
-        - id: image
-          run: echo "IMAGE_NAME=${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.IMAGE_TAG}}" >> "$GITHUB_OUTPUT"
-        - run: ${{ steps.image.outputs.IMAGE_NAME }}
+        - name: docker build for db
+          uses: docker/build-push-action@v7
+          with:
+              context: ./db
+              file: ./db/Dockerfile
+              no-cache: true
+              tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.DB_IMAGE }}:${{ steps.tag_2.outputs.DB_TAG }}
+              push: false
+              load: true
+
+        - id: image_1
+          run: echo "SERVER_IMAGE=${{ secrets.DOCKER_USERNAME }}/${{ env.SERVER_IMAGE }}:${{ steps.tag_1.outputs.SERVER_TAG }}" >> "$GITHUB_OUTPUT"
+        - run: ${{ steps.image_1.outputs.SERVER_IMAGE }}
+
+        - id: image_2
+          run: echo "DB_IMAGE=${{ secrets.DOCKER_USERNAME }}/${{ env.DB_IMAGE }}:${{ steps.tag_2.outputs.DB_TAG }}" >> "$GITHUB_OUTPUT"
+        - run: ${{ steps.image_2.outputs.DB_IMAGE }}
 
     flask-docker-security:
        needs: flask-docker-build
        runs-on: ubuntu-latest
-       if: ${{ inputs.environments != 'dev' && inputs. security_scans == true }}
+       if: ${{ inputs.environments != 'dev' && inputs.security_scans == true }}
        steps:
         - name: caaling Inputs
           run: |
               echo "my environments are: ${{ inputs.environments }}
               echo "my security are: ${{ inputs.security_scans }}
-              echo "my security are: ${{ inputs.smoke-test }} 
 
         - name: check repo
           uses: actions/checkout@v7
           with:
               fetch-depth: 0
 
-        - name: output of previous job
-          id: image
-          run: echo "${{ needs.flask-docker-build.outputs.IMAGE_NAME }}"
+        - name: output of server image
+          id: image_1
+          run: echo "${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}"
+            
+        - name: output of db image
+          id: image_2
+          run: echo "${{ needs.flask-docker-build.outputs.DB_IMAGE }}"
+          
 
-        - name: docker image scan secret security
+        - name: server image scan secret security
           uses: aquasecurity/trivy-action@v0.36.0
           with:
               scan-type: fs
-              scan-ref: ./Dockerfile
+              scan-ref: ./server/Dockerfile
               format: "table"
               ignore-unfixed: "true"
               vuln-type: "os.library"
@@ -125,10 +151,33 @@ jobs:
               severity: "CRITICAL"
               exit-code: "1"
 
-        - name: docker image scan vuln security
+        - name: db image secret scan
           uses: aquasecurity/trivy-action@v0.36.0
           with:
-              image-ref: ${{ needs.flask-docker-build.outputs.IMAGE_NAME }}
+              scan-type: fs
+              scan-ref: ./db/Dockerfile
+              format: "table"
+              ignore-unfixed: "true"
+              vuln-type: "os.library"
+              scanners: "secrets"
+              severity: "CRITICAL"
+              exit-code: "1"
+
+        - name: server image vuln scan 
+          uses: aquasecurity/trivy-action@v0.36.0
+          with:
+              image-ref: ${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}
+              format: "table"
+              ignore-unfixed: "true"
+              vuln-type: "os.library"
+              scanners: "vuln"
+              severity: "CRITICAL"
+              exit-code: "1"
+
+        - name: db image vuln scan 
+          uses: aquasecurity/trivy-action@v0.36.0
+          with:
+              image-ref: ${{ needs.flask-docker-build.outputs.DB_IMAGE }}
               format: "table"
               ignore-unfixed: "true"
               vuln-type: "os.library"
@@ -141,49 +190,83 @@ jobs:
           - flask-docker-build
           - flask-docker-security
         runs-on: ubuntu-latest
-        if: ${{ inputs.environments == 'prod' && inputs.smoke-test == true}}
+        if: ${{ inputs.environments == 'prod' && inputs.smoke_test == true}}
         steps: 
             - name: calling Inputs
               run: |
                   echo "my environments are: ${{ inputs.environments }}
                   echo "my security are: ${{ inputs.security_scans }} 
-                  echo "my s=smoke test are: ${{ inputs.smoke-test }} 
+                  echo "my s=smoke test are: ${{ inputs.smoke_test }} 
 
-            - name: calling output of previous job
-              run: echo "${{ needs.flask-docker-build.outputs.IMAGE_NAME }}"
+            - name: server output of previous job
+              id: image_1
+              run: echo "${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}"
 
-            - name: image validation
+            - name: db output of previous job
+              id: image_2
+              run: echo "${{ needs.flask-docker-build.outputs.DB_IMAGE }}"
+
+            - name: server image validation
               shell: bash
               run: |
-                  if [[ -z "${{ needs.flask-docker-build.outputs.IMAGE_NAME }}" ]]; then
+                  if [[ -z "${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}" ]]; then
                   echo "image not present, and is required"
                   exit 1
                   else
-                  echo "image present; "${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA::7}"
+                  echo "image present; "${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}"
+                  fi
+
+            - name: db image validation
+              shell: bash
+              run: |
+                  if [[ -z "${{ needs.flask-docker-build.outputs.DB_IMAGE }}" ]]; then
+                  echo "image not present, and is required"
+                  exit 1
+                  else
+                  echo "image present; "${{ needs.flask-docker-build.outputs.DB_IMAGE }}"
                   fi
 
             - name: docker network
               run: docker network create --driver=bridge mynetworks
 
-            - name: docker container run
+            - name: server container run
               run: |
-                  docker run -d -p 8080:80 \
+                  docker run -d -p 5000:5000 \
                   --network mynetworks \
-                  --name myreact \
-                  ${{ needs.flask-docker-build.outputs.IMAGE_NAME }}
+                  --name myserver \
+                  ${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}
 
-            - name: container smoke test
+            - name: server container smoke test
               run: |
-                  curl --fail --show-errors http://localhost:8080 || true
-                  curl --fail --show-errors http://localhost:8080/health || true
+                  curl --fail --show-errors http://localhost:5000 || true
+                  curl --fail --show-errors http://localhost:5000/health || true
 
-            - name: container failure
+            - name: db container run
+              run: |
+                  docker run -d -p 27017:27017 \
+                  --network mynetworks \
+                  --name mydb \
+                  ${{ needs.flask-docker-build.outputs.DB_IMAGE }}
+
+            - name: server container smoke test
+              run: |
+                  curl --fail --show-errors http://localhost:27017 || true
+                  curl --fail --show-errors http://localhost:27017/health || true
+
+            - name: server container failure
               if: ${{ failure() }}
-              run: docker logs myreact || true
+              run: docker logs myserver || true
+            - name: db container failure
+              if: ${{ failure() }}
+              run: docker logs mydb || true
 
-            - name: container remove
+            - name: server container remove
               if: ${{ always() }}
-              run: docker rm -f myreact || true
+              run: docker rm -f myserver || true
+
+            - name: db container remove
+              if: ${{ always() }}
+              run: docker rm -f mydb || true
 
             - name: docker login
               uses: docker/login-action@v4
@@ -191,5 +274,8 @@ jobs:
                   username: ${{ secrets.DOCKER_USERNAME }}
                   password: ${{ secrets.DOCKER_TOKEN }}
 
-            - name: docker image push 
-              run: docker push ${{ needs.flask-docker-build.outputs.IMAGE_NAME }}
+            - name: server image push 
+              run: docker push ${{ needs.flask-docker-build.outputs.SERVER_IMAGE }}
+
+            - name: db image push 
+              run: docker push ${{ needs.flask-docker-build.outputs.DB_IMAGE }}
