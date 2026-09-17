@@ -118,7 +118,7 @@ jobs:
     flask-docker-security:
        needs: flask-docker-build
        runs-on: ubuntu-latest
-       if: ${{ inputs.environments != 'dev' && inputs.security_scans == true }}
+       if: ${{ inputs.environments == 'qa' && inputs.security_scans == true }}
        steps:
         - name: caaling Inputs
           run: |
