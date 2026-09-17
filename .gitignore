@@ -1,0 +1,37 @@
+.vscode
+
+java-upgrade
+# ---- Maven build output ----
+target/
+
+# ---- Compiled class files ----
+*.class
+
+# ---- Packaged artifacts ----
+*.jar
+*.war
+
+# ---- Logs ----
+*.log
+hs_err_pid*
+
+# ---- Environment / secrets ----
+.env
+.env.*
+!.env.example
+application-local.properties
+application-secrets.properties
+
+# ---- IDE ----
+.idea/
+*.iml
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+
+# ---- OS junk ----
+.DS_Store
+Thumbs.db
+
