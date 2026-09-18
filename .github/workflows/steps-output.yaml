@@ -124,18 +124,18 @@ jobs:
       - name: Build server image
         uses: docker/build-push-action@v7
         with:
-          context: server
-          file: server/Dockerfile
-          push: true
+          context: ./server
+          file: ./server/Dockerfile
+          push: false
           tags: "${{ steps.images.outputs.server_image }}" 
           load: true
 
       - name: Build db image
         uses: docker/build-push-action@v7
         with:
-          context: db
-          file: db/Dockerfile
-          push: true
+          context: ./db
+          file: ./db/Dockerfile
+          push: false
           tags: "${{ steps.images.outputs.db_image }}" 
           load: true
 
@@ -157,25 +157,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Docker Hub login
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
+    #  - name: Docker Hub login
+    #    uses: docker/login-action@v4
+    #    with:
+    #      username: $#{{ secrets.DOCKER_USERNAME }}
+    #      password: $#{{ secrets.DOCKER_TOKEN }}
 
-      - name: Pull server image
-        run: |
-          docker pull "${{ needs.docker_build.outputs.server_image }}"
+    #  - name: Pull server image
+      #  run: |
+      #   docker pull "$#{{ needs.docker_build.outputs.server_image }}"
 
-      - name: Pull database image
-        run: |
-          docker pull "${{ needs.docker_build.outputs.db_image }}"
+    #  - name: Pull database image
+      #  run: |
+      #    docker pull "$#{{ needs.docker_build.outputs.db_image }}"
 
       - name: Scan server directory for secrets
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
-          scan-ref: server
+          scan-ref: ./server
           format: table
           scanners: secret
           severity: CRITICAL,HIGH
@@ -185,7 +185,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
-          scan-ref: db
+          scan-ref: ./db
           format: table
           scanners: secret
           severity: CRITICAL,HIGH
@@ -230,19 +230,17 @@ jobs:
       }}
 
     steps:
-      - name: Docker Hub login
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
+    #  - name: Docker Hub login
+    #    uses: docker/login-action@v3
+    #    with:
+    #      username: $#{{ secrets.DOCKER_USERNAME }}
+    #      password: $#{{ secrets.DOCKER_TOKEN }}
 
-      - name: Pull server image
-        run: |
-          docker pull "${{ needs.docker_build.outputs.server_image }}"
+      - name: server image
+        run: echo "${{ needs.docker_build.outputs.server_image }}"
 
-      - name: Pull database image
-        run: |
-          docker pull "${{ needs.docker_build.outputs.db_image }}"
+      - name: database image
+        run: echo "${{ needs.docker_build.outputs.db_image }}"
 
       - name: Validate server image
         shell: bash
@@ -332,3 +330,9 @@ jobs:
         if: ${{ always() }}
         run: |
           docker network rm mynetworks || true
+
+      - name: push server image to docker
+        run:  docker push ${{ needs.docker_build.outputs.server_image }}
+
+      - name: push db image to docker
+        run:  docker push ${{ needs.docker_build.outputs.db_image }} 
