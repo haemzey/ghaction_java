@@ -1,197 +1,334 @@
 name: Steps Outputs Workflow
+
 on:
-    workflow_dispatch:
-        inputs:
-            environments:
-                description: deployment
-                required: true
-                default: dev
-                type: choice
-                options: 
-                    - dev
-                    - qa
-                    - prod
+  workflow_dispatch:
+    inputs:
+      environments:
+        description: Deployment environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
 
-            security_scans:
-                description: deployment
-                required: true
-                default: false
-                type: boolean
+      security_scans:
+        description: Run security scans
+        required: true
+        default: true
+        type: boolean
 
-            smoke-test:
-                description: deployment
-                required: true
-                type: boolean
-                default: false
+      smoke_test:
+        description: Run container smoke tests
+        required: true
+        default: true
+        type: boolean
 
-    pull_request:
-        types:
-            - "opened"
-            - "reopened"
-            - "closed"
-            - "synchronize"
-            - "ready_for_review"
-        branches:
-            - main
-        paths:
-            - "**.py"
-            - "test/*"
-            - "Dockerfile"
-            - "requirements.txt"
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - closed
+      - synchronize
+      - ready_for_review
+    branches:
+      - main
+    paths:
+      - "server/**"
+      - "db/**"
+      - "Dockerfile"
+      - "docker-compose.yaml"
 
-    push:
-        branches:
-            - main
-        paths:
-            - "**.py"
-            - "test/*"
-            - "Dockerfile"
-            - "requirements.txt"
-            
-permissions: 
-    contents: read
-    pull-requests: read
+  push:
+    branches:
+      - main
+    paths:
+      - "server/**"
+      - "db/**"
+      - "Dockerfile"
+      - "docker-compose.yaml"
+
+permissions:
+  contents: read
+  pull-requests: read
 
 env:
-    IMAGE_NAME: java_workflow
+  SERVER_IMAGE_NAME: myjava
+  DB_IMAGE_NAME: mymongo
+
 
 jobs:
-    flask-docker-build:
-       runs-on: ubuntu-latest
-       if: ${{ inputs.environments != 'prod'}}
-       outputs:
-            IMAGE_NAME: ${{ steps.image.outputs.IMAGE_NAME }}
-       steps:
-        - name: caaling Inputs
-          run: |
-              echo "my environments are: ${{ inputs.environments }}
-              echo "my security are: ${{ inputs.security_scans }}
-              echo "my security are: ${{ inputs.smoke-test }} 
+  docker_build:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    outputs:
+      server_image: ${{ steps.images.outputs.server_image }}
+      db_image: ${{ steps.images.outputs.db_image }}
 
-        - name: check repo
-          uses: actions/checkout@v7
-          with:
-              fetch-depth: 0
+    steps:
+      - name: Generate image tag
+        id: tags
+        shell: bash
+        run: |
+          IMAGE_TAG="v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "Generated image tag: $IMAGE_TAG"
 
-        - name: git-leaks checkpu
-          uses: gitleaks/gitleaks-action@v3
-          env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set image names
+        id: images
+        shell: bash
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          SERVER_IMAGE_NAME: ${{ env.SERVER_IMAGE_NAME }}
+          DB_IMAGE_NAME: ${{ env.DB_IMAGE_NAME }}
+          IMAGE_TAG: ${{ steps.tags.outputs.IMAGE_TAG }}
+        run: |
+          set -euo pipefail
 
-        - name: tag
-          id: tag
-          run: echo "IMAGE_TAG=v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "GITHUB_OUTPUT"
+          SERVER_IMAGE="${DOCKER_USERNAME}/${SERVER_IMAGE_NAME}:${IMAGE_TAG}"
+          DB_IMAGE="${DOCKER_USERNAME}/${DB_IMAGE_NAME}:${IMAGE_TAG}"
 
-        - name: docker build 
-          if: ${{ inputs.environments != 'prod'}}
-          uses: docker/build-push-action@v7
-          with:
-              context: .
-              no-cache: true
-              tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.IMAGE_TAG }}
-              push: false
+          echo "server_image=$SERVER_IMAGE" >> "$GITHUB_OUTPUT"
+          echo "db_image=$DB_IMAGE" >> "$GITHUB_OUTPUT"
 
-        - id: image
-          run: echo "IMAGE_NAME=${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.IMAGE_TAG}}" >> "$GITHUB_OUTPUT"
-        - run: ${{ steps.image.outputs.IMAGE_NAME }}
+          echo "Server image: $SERVER_IMAGE"
+          echo "Database image: $DB_IMAGE"
 
-    flask-docker-security:
-       needs: flask-docker-build
-       runs-on: ubuntu-latest
-       if: ${{ inputs.environments == 'prod' && inputs. security_scans == true }}
-       steps:
-        - name: caaling Inputs
-          run: |
-              echo "my environments are: ${{ inputs.environments }}
-              echo "my security are: ${{ inputs.security_scans }}
-              echo "my security are: ${{ inputs.smoke-test }} 
+      - name: Validate image outputs
+        shell: bash
+        env:
+          SERVER_IMAGE: ${{ steps.images.outputs.server_image }}
+          DB_IMAGE: ${{ steps.images.outputs.db_image }}
+        run: |
+          set -euo pipefail
 
-        - name: check repo
-          uses: actions/checkout@v7
-          with:
-              fetch-depth: 0
+          echo "SERVER_IMAGE=$SERVER_IMAGE"
+          echo "DB_IMAGE=$DB_IMAGE"
 
-        - name: output of previous job
-          id: image
-          run: echo "${{ needs.flask-docker-build.outputs.IMAGE_NAME }}"
+          [[ -n "$SERVER_IMAGE" ]] || {
+            echo "SERVER_IMAGE output is empty."
+            exit 1
+          }
 
-        - name: docker image scan secret security
-          uses: aquasecurity/trivy-action@v0.36.0
-          with:
-              scan-type: fs
-              scan-ref: ./Dockerfile
-              format: "table"
-              ignore-unfixed: "true"
-              vuln-type: "os.library"
-              scanners: "secrets"
-              severity: "CRITICAL"
-              exit-code: "1"
+          [[ -n "$DB_IMAGE" ]] || {
+            echo "DB_IMAGE output is empty."
+            exit 1
+          }
 
-        - name: docker image scan vuln security
-          uses: aquasecurity/trivy-action@v0.36.0
-          with:
-              image-ref: ${{ needs.flask-docker-build.outputs.IMAGE_NAME }}
-              format: "table"
-              ignore-unfixed: "true"
-              vuln-type: "os.library"
-              scanners: "vuln"
-              severity: "CRITICAL"
-              exit-code: "1"
+      - name: Docker Hub login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+      - name: Build server image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          push: true
+          tags: "${{ steps.images.outputs.server_image }}" 
+          load: true
 
-    flask-deploy:
-        needs:
-          - flask-docker-build
-          - flask-docker-security
-        runs-on: ubuntu-latest
-        if: ${{ inputs.environments == 'prod' && inputs.smoke-test == true}}
-        steps: 
-            - name: caaling Inputs
-              run: |
-                  echo "my environments are: ${{ inputs.environments }}
-                  echo "my security are: ${{ inputs.security_scans }} 
-                  echo "my s=smoke test are: ${{ inputs.smoke-test }} 
+      - name: Build db image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./db
+          file: ./db/Dockerfile
+          push: true
+          tags: "${{ steps.images.outputs.db_image }}" 
+          load: true
 
-            - name: calling output of previous job
-              run: echo "${{ needs.flask-docker-build.outputs.IMAGE_NAME }}"
+  docker_security:
+    name: Security Scans
+    needs: docker_build
+    runs-on: ubuntu-latest
 
-            - name: image validation
-              shell: bash
-              run: |
-                  if [[ -z "${{ needs.flask-docker-build.outputs.IMAGE_NAME }}" ]]; then
-                  echo "image not present, and is required"
-                  exit 1
-                  else
-                  echo "image present; "${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA::7}"
-                  fi
+    if: ${{
+        inputs.environments == 'qa' &&
+        inputs.environments == 'prod' &&
+        inputs.security_scans == true &&
+        needs.docker_build.result == 'success'
+        }}
 
-            - name: docker network
-              run: docker network create --driver=bridge mynetworks
+    steps:
+      - name: Check repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-            - name: docker container run
-              run: |
-                  docker run -d -p 8080:80 \
-                  --network mynetworks \
-                  --name myreact \
-                  ${{ needs.flask-docker-build.outputs.IMAGE_NAME }}
+      - name: Docker Hub login
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
-            - name: container smoke test
-              run: |
-                  curl --fail --show-errors http://localhost:8080 || true
-                  curl --fail --show-errors http://localhost:8080/health || true
+      - name: Pull server image
+        run: |
+          docker pull "${{ needs.docker_build.outputs.server_image }}"
 
-            - name: container failure
-              if: ${{ failure() }}
-              run: docker logs myreact || true
+      - name: Pull database image
+        run: |
+          docker pull "${{ needs.docker_build.outputs.db_image }}"
 
-            - name: container remove
-              if: ${{ always() }}
-              run: docker rm -f myreact || true
+      - name: Scan server directory for secrets
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ./server
+          format: table
+          scanners: secret
+          severity: CRITICAL,HIGH
+          exit-code: "1"
 
-            - name: docker login
-              uses: docker/login-action@v4
-              with:
-                  username: ${{ secrets.DOCKER_USERNAME }}
-                  password: ${{ secrets.DOCKER_TOKEN }}
+      - name: Scan database directory for secrets
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ./db
+          format: table
+          scanners: secret
+          severity: CRITICAL,HIGH
+          exit-code: "1"
 
-            - name: docker image push 
-              run: docker push ${{ needs.flask-docker-build.outputs.IMAGE_NAME }}
+      - name: Scan server image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ needs.docker_build.outputs.server_image }}
+          format: table
+          ignore-unfixed: true
+          vuln-type: os,library
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+
+      - name: Scan database image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ needs.docker_build.outputs.db_image }}
+          format: table
+          ignore-unfixed: true
+          vuln-type: os,library
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+
+  docker_deploy:
+    name: Production Deployment
+    needs:
+      - docker_build
+      - docker_security
+
+    runs-on: ubuntu-latest
+
+    if: ${{
+        always() &&
+        inputs.environments == 'prod' &&
+        inputs.smoke_test == true &&
+        needs.docker_build.result == 'success' &&
+        needs.docker_security.result == 'success' 
+      }}
+
+    steps:
+      - name: Docker Hub login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Pull server image
+        run: |
+          docker pull "${{ needs.docker_build.outputs.server_image }}"
+
+      - name: Pull database image
+        run: |
+          docker pull "${{ needs.docker_build.outputs.db_image }}"
+
+      - name: Validate server image
+        shell: bash
+        run: |
+          SERVER_IMAGE="${{ needs.docker_build.outputs.server_image }}"
+
+          if [[ -z "$SERVER_IMAGE" ]]; then
+            echo "Server image name is empty."
+            exit 1
+          fi
+
+          echo "Server image is available: $SERVER_IMAGE"
+
+      - name: Validate database image
+        shell: bash
+        run: |
+          DB_IMAGE="${{ needs.docker_build.outputs.db_image }}"
+
+          if [[ -z "$DB_IMAGE" ]]; then
+            echo "Database image name is empty."
+            exit 1
+          fi
+
+          echo "Database image is available: $DB_IMAGE"
+
+      - name: Create Docker network
+        run: |
+          docker network create --driver bridge mynetworks
+
+      - name: Run database container
+        run: |
+          docker run -d \
+            --name mydb \
+            --network mynetworks \
+            -p 27017:27017 \
+            "${{ needs.docker_build.outputs.db_image }}"
+
+      - name: Run server container
+        run: |
+          docker run -d \
+            --name myserver \
+            --network mynetworks \
+            -p 5000:5000 \
+            "${{ needs.docker_build.outputs.server_image }}"
+
+      - name: Wait for containers
+        run: |
+          sleep 10
+
+      - name: Server container smoke test
+        run: |
+          curl --fail --show-error --retry 5 --retry-delay 2 \
+            http://localhost:5000
+
+      - name: Server health check
+        run: |
+          curl --fail --show-error --retry 5 --retry-delay 2 \
+            http://localhost:5000/health
+
+      - name: Database container smoke test
+        run: |
+          docker exec mydb \
+            mongosh --quiet \
+            --eval "db.adminCommand({ ping: 1 })"
+
+      - name: Show server logs on failure
+        if: ${{ failure() }}
+        run: |
+          docker logs myserver || true
+
+      - name: Show database logs on failure
+        if: ${{ failure() }}
+        run: |
+          docker logs mydb || true
+
+      - name: Remove server container
+        if: ${{ always() }}
+        run: |
+          docker rm -f myserver || true
+
+      - name: Remove database container
+        if: ${{ always() }}
+        run: |
+          docker rm -f mydb || true
+
+      - name: Remove Docker network
+        if: ${{ always() }}
+        run: |
+          docker network rm mynetworks || true
