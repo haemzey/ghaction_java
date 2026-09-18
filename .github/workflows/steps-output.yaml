@@ -1,269 +1,329 @@
 name: Steps Outputs Workflow
+
 on:
-    workflow_dispatch:
-        inputs:
-            environments:
-                description: deployment
-                required: true
-                default: dev
-                type: choice
-                options: 
-                    - dev
-                    - qa
-                    - prod
+  workflow_dispatch:
+    inputs:
+      environments:
+        description: Deployment environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
 
-            security_scans:
-                description: deployment
-                required: true
-                default: true
-                type: boolean
+      security_scans:
+        description: Run security scans
+        required: true
+        default: true
+        type: boolean
 
-            smoke_test:
-                description: deployment
-                required: true
-                type: boolean
-                default: true
+      smoke_test:
+        description: Run container smoke tests
+        required: true
+        default: true
+        type: boolean
 
-    pull_request:
-        types:
-            - "opened"
-            - "reopened"
-            - "closed"
-            - "synchronize"
-            - "ready_for_review"
-        branches:
-            - main
-        paths:
-            - "server/**"
-            - "db/**"
-            - "Dockerfile"
-            - "docker-compose.yaml"
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - closed
+      - synchronize
+      - ready_for_review
+    branches:
+      - main
+    paths:
+      - "server/**"
+      - "db/**"
+      - "Dockerfile"
+      - "docker-compose.yaml"
 
-    push:
-        branches:
-            - main
-        paths:
-            - "server/**"
-            - "db/**"
-            - "Dockerfile"
-            - "docker-compose.yaml"
-            
-permissions: 
-    contents: read
-    pull-requests: read
+  push:
+    branches:
+      - main
+    paths:
+      - "server/**"
+      - "db/**"
+      - "Dockerfile"
+      - "docker-compose.yaml"
+
+permissions:
+  contents: read
+  pull-requests: read
 
 env:
-    SERVER_IMAGE: myjava
-    DB_IMAGE: mymongo
+  SERVER_IMAGE_NAME: myjava
+  DB_IMAGE_NAME: mymongo
+
 
 jobs:
-    flask_docker_build:
-       runs-on: ubuntu-latest
-       if: ${{ inputs.environments != 'prod' }}
-       outputs:
-            SERVER_IMAGE: ${{ steps.image_1.outputs.SERVER_IMAGE }}
-            DB_IMAGE: ${{ steps.image_2.outputs.DB_IMAGE }} 
-       steps:
-        - name: check repo
-          uses: actions/checkout@v7
-          with:
-              fetch-depth: 0
+  docker_build:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
 
-        - name: git-leaks checkup
-          uses: gitleaks/gitleaks-action@v3
-          env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      server_image: ${{ steps.images.outputs.server_image }}
+      db_image: ${{ steps.images.outputs.db_image }}
 
-        - name: tag_1
-          id: tag_1
-          run: echo "SERVER_TAG=v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+    steps:
+      - name: Check repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-        - name: tag_2
-          id: tag_2
-          run: echo "DB_TAG=v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Gitleaks check
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-        - id: image_1
-          run: echo "SERVER_IMAGE=${{ secrets.DOCKER_USERNAME }}/${{ env.SERVER_IMAGE }}:${{ steps.tag_1.outputs.SERVER_TAG }}" >> "$GITHUB_OUTPUT"
-        - run: echo "${{ steps.image_1.outputs.SERVER_IMAGE }}"
+      - name: Generate image tags
+        id: tags
+        shell: bash
+        run: |
+          IMAGE_TAG="v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
 
-        - id: image_2
-          run: echo "DB_IMAGE=${{ secrets.DOCKER_USERNAME }}/${{ env.DB_IMAGE }}:${{ steps.tag_2.outputs.DB_TAG }}" >> "$GITHUB_OUTPUT"
-        - run: echo "${{ steps.image_2.outputs.DB_IMAGE }}"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
-        - name: docker build for server
-          uses: docker/build-push-action@v7
-          with:
-              context: ./server
-              file: ./server/Dockerfile
-           #  no-cache: true
-              tags: ${{ steps.image_1.outputs.SERVER_IMAGE }}
-              push: false
-              load: true
+          echo "Generated image tag: $IMAGE_TAG"
 
-        - name: docker build for db
-          uses: docker/build-push-action@v7
-          with:
-              context: ./db
-              file: ./db/Dockerfile
-           #  no-cache: true
-              tags: ${{ steps.image_1.outputs.DB_IMAGE }}
-              push: false
-              load: true       
-    
-    flask_docker_security:
-       needs: flask_docker_build
-       runs-on: ubuntu-latest
-       if: ${{ inputs.environments == 'qa' && inputs.security_scans == true }}
-       outputs:
-           SERVER_IMAGE: ${{ needs.flask_docker_build.outputs.SERVER_IMAGE }}
-           DB_IMAGE: ${{ needs.flask_docker_build.outputs.DB_IMAGE }}
-       steps:
-        - name: check repo
-          uses: actions/checkout@v7
-          with:
-              fetch-depth: 0
+      - name: Docker Hub login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
-        - name: output of server image
-          id: image_1
-          run: echo "${{ needs.flask_docker_build.outputs.SERVER_IMAGE }}"
-            
-        - name: output of db image
-          id: image_2
-          run: echo "${{ needs.flask_docker_build.outputs.DB_IMAGE }}"
-          
+      - name: Set image names
+        id: images
+        shell: bash
+        run: |
+          SERVER_IMAGE="${{ secrets.DOCKER_USERNAME }}/${{ env.SERVER_IMAGE_NAME }}:${{ steps.tags.outputs.IMAGE_TAG }}"
+          DB_IMAGE="${{ secrets.DOCKER_USERNAME }}/${{ env.DB_IMAGE_NAME }}:${{ steps.tags.outputs.IMAGE_TAG }}"
 
-        - name: server image scan secret security
-          uses: aquasecurity/trivy-action@v0.36.0
-          with:
-              scan-type: fs
-              scan-ref: ./server/Dockerfile
-              format: "table"
-              ignore-unfixed: "true"
-              vuln-type: "os,library"
-              scanners: "secret"
-              severity: "CRITICAL"
-              exit-code: "1"
+          echo "server_image=$SERVER_IMAGE" >> "$GITHUB_OUTPUT"
+          echo "db_image=$DB_IMAGE" >> "$GITHUB_OUTPUT"
 
-        - name: db image secret scan
-          uses: aquasecurity/trivy-action@v0.36.0
-          with:
-              scan-type: fs
-              scan-ref: ./db/Dockerfile
-              format: "table"
-              ignore-unfixed: "true"
-              vuln-type: "os,library"
-              scanners: "secret"
-              severity: "CRITICAL"
-              exit-code: "1"
+          echo "Server image: $SERVER_IMAGE"
+          echo "Database image: $DB_IMAGE"
 
-        - name: server image vuln scan 
-          uses: aquasecurity/trivy-action@v0.36.0
-          with:
-              image-ref: ${{ needs.flask_docker_build.outputs.SERVER_IMAGE }}
-              format: "table"
-              ignore-unfixed: "true"
-              vuln-type: "os,library"
-              scanners: "vuln"
-              severity: "CRITICAL"
-              exit-code: "1"
+      - name: Build and push server image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          tags: ${{ steps.images.outputs.server_image }}
+          push: true
 
-        - name: db image vuln scan 
-          uses: aquasecurity/trivy-action@v0.36.0
-          with:
-              image-ref: ${{ needs.flask_docker_build.outputs.DB_IMAGE }}
-              format: "table"
-              ignore-unfixed: "true"
-              vuln-type: "os,library"
-              scanners: "vuln"
-              severity: "CRITICAL"
-              exit-code: "1"
+      - name: Build and push database image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./db
+          file: ./db/Dockerfile
+          tags: ${{ steps.images.outputs.db_image }}
+          push: true
 
-    flask-deploy:
-        needs:
-          - flask_docker_build
-          - flask_docker_security
-        runs-on: ubuntu-latest
-        if: ${{ inputs.environments == 'prod' && inputs.smoke_test == true}}
-        steps: 
-            - name: server output of previous job
-              id: image_1
-              run: echo "${{ needs.flask_docker_build.outputs.SERVER_IMAGE }}"
+  docker_security:
+    name: Security Scans
+    needs: docker_build
+    runs-on: ubuntu-latest
 
-            - name: db output of previous job
-              id: image_2
-              run: echo "${{ needs.flask_docker_build.outputs.DB_IMAGE }}"
+    if: ${{
+        inputs.environments != 'dev' &&
+        inputs.security_scans == true
+      }}
 
-            - name: server image validation
-              shell: bash
-              run: |
-                  if [[ -z "${{ needs.flask_docker_build.outputs.SERVER_IMAGE }}" ]]; then
-                  echo "image not present, and is required"
-                  exit 1
-                  else
-                  echo "image present; "${{ needs.flask_docker_build.outputs.DB_IMAGE }}"
-                  fi
+    steps:
+      - name: Check repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-            - name: db image validation
-              shell: bash
-              run: |
-                  if [[ -z "${{ needs.flask_docker_build.outputs.DB_IMAGE }}" ]]; then
-                  echo "image not present, and is required"
-                  exit 1
-                  else
-                  echo "image present; "${{ needs.flask_docker_build.outputs.DB_IMAGE }}"
-                  fi
+      - name: Display image outputs
+        run: |
+          echo "Server image: ${{ needs.docker_build.outputs.server_image }}"
+          echo "Database image: ${{ needs.docker_build.outputs.db_image }}"
 
-            - name: docker network
-              run: docker network create --driver=bridge mynetworks
+      - name: Docker Hub login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
-            - name: server container run
-              run: |
-                  docker run -d -p 5000:5000 \
-                  --network mynetworks \
-                  --name myserver \
-                  ${{ needs.flask_docker_build.outputs.SERVER_IMAGE }}
+      - name: Pull server image
+        run: |
+          docker pull "${{ needs.docker_build.outputs.server_image }}"
 
-            - name: server container smoke test
-              run: |
-                  curl --fail --show-errors http://localhost:5000 || true
-                  curl --fail --show-errors http://localhost:5000/health || true
+      - name: Pull database image
+        run: |
+          docker pull "${{ needs.docker_build.outputs.db_image }}"
 
-            - name: db container run
-              run: |
-                  docker run -d -p 27017:27017 \
-                  --network mynetworks \
-                  --name mydb \
-                  ${{ needs.flask_docker_build.outputs.DB_IMAGE }}
+      - name: Scan server directory for secrets
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ./server
+          format: table
+          scanners: secret
+          severity: CRITICAL,HIGH
+          exit-code: "1"
 
-            - name: server container failure
-              if: ${{ failure() }}
-              run: docker logs myserver || true
+      - name: Scan database directory for secrets
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ./db
+          format: table
+          scanners: secret
+          severity: CRITICAL,HIGH
+          exit-code: "1"
 
-            - name: server container remove
-              if: ${{ always() }}
-              run: docker rm -f myserver || true
+      - name: Scan server image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ needs.docker_build.outputs.server_image }}
+          format: table
+          ignore-unfixed: true
+          vuln-type: os,library
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          exit-code: "1"
 
-            - name: db container smoke test
-              run: |
-                  curl --fail --show-errors http://localhost:27017 || true
-                  curl --fail --show-errors http://localhost:27017/health || true
+      - name: Scan database image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ needs.docker_build.outputs.db_image }}
+          format: table
+          ignore-unfixed: true
+          vuln-type: os,library
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          exit-code: "1"
 
-            - name: db container failure
-              if: ${{ failure() }}
-              run: docker logs mydb || true
+  docker_deploy:
+    name: Production Deployment
+    needs:
+      - docker_build
+      - docker_security
 
-            - name: db container remove
-              if: ${{ always() }}
-              run: docker rm -f mydb || true
+    runs-on: ubuntu-latest
 
-            - name: docker login
-              uses: docker/login-action@v4
-              with:
-                  username: ${{ secrets.DOCKER_USERNAME }}
-                  password: ${{ secrets.DOCKER_TOKEN }}
+    if: ${{
+        always() &&
+        inputs.environments == 'prod' &&
+        inputs.smoke_test == true &&
+        needs.docker_build.result == 'success' &&
+        (
+          needs.docker_security.result == 'success' ||
+          needs.docker_security.result == 'skipped'
+        )
+      }}
 
-            - name: server image push 
-              run: docker push ${{ needs.flask_docker_build.outputs.SERVER_IMAGE }}
+    steps:
+      - name: Display image outputs
+        run: |
+          echo "Server image: ${{ needs.docker_build.outputs.server_image }}"
+          echo "Database image: ${{ needs.docker_build.outputs.db_image }}"
 
-            - name: db image push 
-              run: docker push ${{ needs.flask_docker_build.outputs.DB_IMAGE }}
+      - name: Docker Hub login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Pull server image
+        run: |
+          docker pull "${{ needs.docker_build.outputs.server_image }}"
+
+      - name: Pull database image
+        run: |
+          docker pull "${{ needs.docker_build.outputs.db_image }}"
+
+      - name: Validate server image
+        shell: bash
+        run: |
+          SERVER_IMAGE="${{ needs.docker_build.outputs.server_image }}"
+
+          if [[ -z "$SERVER_IMAGE" ]]; then
+            echo "Server image name is empty."
+            exit 1
+          fi
+
+          echo "Server image is available: $SERVER_IMAGE"
+
+      - name: Validate database image
+        shell: bash
+        run: |
+          DB_IMAGE="${{ needs.docker_build.outputs.db_image }}"
+
+          if [[ -z "$DB_IMAGE" ]]; then
+            echo "Database image name is empty."
+            exit 1
+          fi
+
+          echo "Database image is available: $DB_IMAGE"
+
+      - name: Create Docker network
+        run: |
+          docker network create --driver bridge mynetworks
+
+      - name: Run database container
+        run: |
+          docker run -d \
+            --name mydb \
+            --network mynetworks \
+            -p 27017:27017 \
+            "${{ needs.docker_build.outputs.db_image }}"
+
+      - name: Run server container
+        run: |
+          docker run -d \
+            --name myserver \
+            --network mynetworks \
+            -p 5000:5000 \
+            "${{ needs.docker_build.outputs.server_image }}"
+
+      - name: Wait for containers
+        run: |
+          sleep 10
+
+      - name: Server container smoke test
+        run: |
+          curl --fail --show-error --retry 5 --retry-delay 2 \
+            http://localhost:5000
+
+      - name: Server health check
+        run: |
+          curl --fail --show-error --retry 5 --retry-delay 2 \
+            http://localhost:5000/health
+
+      - name: Database container smoke test
+        run: |
+          docker exec mydb \
+            mongosh --quiet \
+            --eval "db.adminCommand({ ping: 1 })"
+
+      - name: Show server logs on failure
+        if: ${{ failure() }}
+        run: |
+          docker logs myserver || true
+
+      - name: Show database logs on failure
+        if: ${{ failure() }}
+        run: |
+          docker logs mydb || true
+
+      - name: Remove server container
+        if: ${{ always() }}
+        run: |
+          docker rm -f myserver || true
+
+      - name: Remove database container
+        if: ${{ always() }}
+        run: |
+          docker rm -f mydb || true
+
+      - name: Remove Docker network
+        if: ${{ always() }}
+        run: |
+          docker network rm mynetworks || true
