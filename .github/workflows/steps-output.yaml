@@ -125,8 +125,8 @@ jobs:
       - name: Build and push server image
         uses: docker/build-push-action@v6
         with:
-          context: ./server
-          file: ./server/Dockerfile
+          context: ghaction_java/server
+          file: ghaction_java/server/Dockerfile
           tags: ${{ steps.images.outputs.server_image }}
           push: true
           load: true
@@ -134,8 +134,8 @@ jobs:
       - name: Build and push database image
         uses: docker/build-push-action@v6
         with:
-          context: ./db
-          file: ./db/Dockerfile
+          context: ghaction_java/db
+          file: ghaction_java/db/Dockerfile
           tags: ${{ steps.images.outputs.db_image }}
           push: true
           load: true
@@ -180,7 +180,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
-          scan-ref: ./server
+          scan-ref: ghaction_java/server
           format: table
           scanners: secret
           severity: CRITICAL,HIGH
@@ -190,7 +190,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
-          scan-ref: ./db
+          scan-ref: ghaction_java/db
           format: table
           scanners: secret
           severity: CRITICAL,HIGH
