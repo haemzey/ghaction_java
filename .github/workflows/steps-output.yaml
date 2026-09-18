@@ -121,24 +121,17 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
+      - name: Build server image
+        run: docker build -t "${{ steps.images.outputs.server_image }}" /server/Dockerfile
 
-      - name: Build and push server image
-        uses: docker/build-push-action@v7
-        with:
-          context: ./server
-          file: ./server/Dockerfile
-          tags: ${{ steps.images.outputs.server_image }}
-          push: true
-          load: true
+      - name: Build push server image
+        run: docker push "${{ steps.images.outputs.server_image }}" 
 
-      - name: Build and push database image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./db
-          file: ./db/Dockerfile
-          tags: ${{ steps.images.outputs.db_image }}
-          push: true
-          load: true
+      - name: Build db image
+        run: docker build -t "${{ steps.images.outputs.db_image }}" /db/Dockerfile
+
+      - name: Build push server image
+        run: docker push "${{ steps.images.outputs.db_image }}"
 
   docker_security:
     name: Security Scans
