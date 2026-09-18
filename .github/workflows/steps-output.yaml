@@ -116,28 +116,6 @@ jobs:
             exit 1
           }
 
-      - name: Verify repository paths
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "Current directory:"
-          pwd
-
-          echo "Repository contents:"
-          ls -la
-
-          echo "Server directory:"
-          ls -la ./server
-
-          echo "Database directory:"
-          ls -la ./db
-
-          test -f ./server/Dockerfile
-          test -f ./db/Dockerfile
-
-          echo "Both Dockerfiles were found successfully."  
-
       - name: Docker Hub login
         uses: docker/login-action@v3
         with:
@@ -147,8 +125,8 @@ jobs:
       - name: Build and push server image
         uses: docker/build-push-action@v6
         with:
-          context: ./server
-          file: ./server/Dockerfile
+          context: server/
+          file: server/Dockerfile
           tags: ${{ steps.images.outputs.server_image }}
           push: true
           load: true
@@ -156,8 +134,8 @@ jobs:
       - name: Build and push database image
         uses: docker/build-push-action@v6
         with:
-          context: ./db
-          file: ./db/Dockerfile
+          context: db
+          file: db/Dockerfile
           tags: ${{ steps.images.outputs.db_image }}
           push: true
           load: true
@@ -202,7 +180,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
-          scan-ref: ghaction_java/server
+          scan-ref: server
           format: table
           scanners: secret
           severity: CRITICAL,HIGH
@@ -212,7 +190,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
-          scan-ref: ghaction_java/db
+          scan-ref: db
           format: table
           scanners: secret
           severity: CRITICAL,HIGH
