@@ -64,16 +64,12 @@ jobs:
             SERVER_IMAGE: ${{ steps.image_1.outputs.SERVER_IMAGE }}
             DB_IMAGE: ${{ steps.image_2.outputs.DB_IMAGE }} 
        steps:
-        - name: caling Inputs
-          run: |
-              echo "my environments are: ${{ inputs.environments }}
-
         - name: check repo
           uses: actions/checkout@v7
           with:
               fetch-depth: 0
 
-        - name: git-leaks checkpu
+        - name: git-leaks checkup
           uses: gitleaks/gitleaks-action@v3
           env:
               GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -122,11 +118,6 @@ jobs:
            SERVER_IMAGE: ${{ needs.flask_docker_build.outputs.SERVER_IMAGE }}
            DB_IMAGE: ${{ needs.flask_docker_build.outputs.DB_IMAGE }}
        steps:
-        - name: caaling Inputs
-          run: |
-              echo "my environments are: ${{ inputs.environments }}
-              echo "my security are: ${{ inputs.security_scans }}
-
         - name: check repo
           uses: actions/checkout@v7
           with:
@@ -194,12 +185,6 @@ jobs:
         runs-on: ubuntu-latest
         if: ${{ inputs.environments == 'prod' && inputs.smoke_test == true}}
         steps: 
-            - name: calling Inputs
-              run: |
-                  echo "my environments are: ${{ inputs.environments }}
-                  echo "my security are: ${{ inputs.security_scans }} 
-                  echo "my s=smoke test are: ${{ inputs.smoke_test }} 
-
             - name: server output of previous job
               id: image_1
               run: echo "${{ needs.flask_docker_build.outputs.SERVER_IMAGE }}"
