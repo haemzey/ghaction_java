@@ -1,0 +1,75 @@
+name:  Output Call Workflow
+on:
+    pull_request:
+        types:
+            - "opened"
+            - "reopened"
+            - "closed"
+            - "synchronize"
+            - "ready_for_review"
+        branches:
+            - main
+        paths:
+            - "**.py"
+            - "test/*"
+            - "Dockerfile"
+            - "requirements.txt"
+
+    push:
+        branches:
+            - main
+        paths:
+            - "**.py"
+            - "test/*"
+            - "Dockerfile"
+            - "requirements.txt"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+    #deploy:
+        #uses: ./.github/workflows/output-reuse-workflow.yaml
+        #with:
+        #    application_name: ghaction_java
+        #    replicas: 5
+            
+    production:
+    #  needs: deploy
+      runs-on: ubuntu-latest
+      steps:
+            - run: echo "========PRODUCTION START========"
+
+            - name: Login to ECR
+              id: ecr
+              uses: elgohr/ecr-login-action@v3
+              with:
+                  access_key: ${{ secrets.AWS_ACCESS_KEY }}
+                  secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  region: ${{ secrets.AWS_REGION }}
+
+            - name: Server Image Publish to Registry
+              uses: elgohr/Publish-Docker-Github-Action@v5
+              with:
+                  name: ${{ needs.deploy.outputs.SEVER_IMAGE }}
+                  username: ${{ steps.ecr.outputs.username }}
+                  password: ${{ steps.ecr.outputs.password }}
+                  registry: ${{ steps.ecr.outputs.registry }}
+
+            - name: DB Image Publish to Registry
+              uses: elgohr/Publish-Docker-Github-Action@v5
+              with:
+                  name: ${{ needs.deploy.outputs.DB_IMAGE }}
+                  username: ${{ steps.ecr.outputs.username }}
+                  password: ${{ steps.ecr.outputs.password }}
+                  registry: ${{ steps.ecr.outputs.registry }}
+
+            - run: echo "========PRODUCTION COMPLETE========="
+
+
+
+
+
+
+
