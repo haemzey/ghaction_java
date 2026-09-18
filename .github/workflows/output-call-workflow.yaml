@@ -1,34 +1,10 @@
 name:  Output Call Workflow
 on:
-    pull_request:
-        types:
-            - "opened"
-            - "reopened"
-            - "closed"
-            - "synchronize"
-            - "ready_for_review"
-        branches:
-            - main
-        paths:
-            - "**.py"
-            - "test/*"
-            - "Dockerfile"
-            - "requirements.txt"
-
-    push:
-        branches:
-            - main
-        paths:
-            - "**.py"
-            - "test/*"
-            - "Dockerfile"
-            - "requirements.txt"
+    workflow_dispatch:
 
 permissions:
   contents: read
-  pull-requests: read
 
-  
 jobs:
     deploy:
         uses: ./.github/workflows/output-reuse-workflow.yaml
@@ -39,7 +15,6 @@ jobs:
       needs: deploy
       runs-on: ubuntu-latest
       steps: 
-          
             - name: server image
               run: ${{ needs.deploy.outputs.SERVER_IMAGE }}
 
