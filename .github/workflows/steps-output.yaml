@@ -124,8 +124,8 @@ jobs:
       - name: Build server image
         uses: docker/build-push-action@v7
         with:
-          context: ./server
-          file: ./server/Dockerfile
+          context: server
+          file: server/Dockerfile
           push: true
           tags: "${{ steps.images.outputs.server_image }}" 
           load: true
@@ -133,8 +133,8 @@ jobs:
       - name: Build db image
         uses: docker/build-push-action@v7
         with:
-          context: ./db
-          file: ./db/Dockerfile
+          context: db
+          file: db/Dockerfile
           push: true
           tags: "${{ steps.images.outputs.db_image }}" 
           load: true
@@ -175,7 +175,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
-          scan-ref: ./server
+          scan-ref: server
           format: table
           scanners: secret
           severity: CRITICAL,HIGH
@@ -185,7 +185,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
-          scan-ref: ./db
+          scan-ref: db
           format: table
           scanners: secret
           severity: CRITICAL,HIGH
