@@ -15,14 +15,14 @@ on:
             security_scans:
                 description: deployment
                 required: true
-                default: false
+                default: true
                 type: boolean
 
             smoke_test:
                 description: deployment
                 required: true
                 type: boolean
-                default: false
+                default: true
 
     pull_request:
         types:
