@@ -7,7 +7,7 @@ permissions:
 
 jobs:
     deploy:
-        uses: ./.github/workflows/output-reuse-workflow.yaml
+        uses: ./.github/workflows/output-reuse-workflowl.yaml
         with:
             application_name: ghaction_java
             replicas: 5
