@@ -62,50 +62,65 @@ jobs:
   docker_build:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
-
     outputs:
       server_image: ${{ steps.images.outputs.server_image }}
       db_image: ${{ steps.images.outputs.db_image }}
 
     steps:
-      - name: Check repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Gitleaks check
-        uses: gitleaks/gitleaks-action@v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate image tags
+      - name: Generate image tag
         id: tags
         shell: bash
         run: |
           IMAGE_TAG="v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
-
           echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-
           echo "Generated image tag: $IMAGE_TAG"
-
-      - name: Docker Hub login
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Set image names
         id: images
         shell: bash
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          SERVER_IMAGE_NAME: ${{ env.SERVER_IMAGE_NAME }}
+          DB_IMAGE_NAME: ${{ env.DB_IMAGE_NAME }}
+          IMAGE_TAG: ${{ steps.tags.outputs.IMAGE_TAG }}
         run: |
-          SERVER_IMAGE="${{ secrets.DOCKER_USERNAME }}/${{ env.SERVER_IMAGE_NAME }}:${{ steps.tags.outputs.IMAGE_TAG }}"
-          DB_IMAGE="${{ secrets.DOCKER_USERNAME }}/${{ env.DB_IMAGE_NAME }}:${{ steps.tags.outputs.IMAGE_TAG }}"
+          set -euo pipefail
+
+          SERVER_IMAGE="${DOCKER_USERNAME}/${SERVER_IMAGE_NAME}:${IMAGE_TAG}"
+          DB_IMAGE="${DOCKER_USERNAME}/${DB_IMAGE_NAME}:${IMAGE_TAG}"
 
           echo "server_image=$SERVER_IMAGE" >> "$GITHUB_OUTPUT"
           echo "db_image=$DB_IMAGE" >> "$GITHUB_OUTPUT"
 
           echo "Server image: $SERVER_IMAGE"
           echo "Database image: $DB_IMAGE"
+
+      - name: Validate image outputs
+        shell: bash
+        env:
+          SERVER_IMAGE: ${{ steps.images.outputs.server_image }}
+          DB_IMAGE: ${{ steps.images.outputs.db_image }}
+        run: |
+          set -euo pipefail
+
+          echo "SERVER_IMAGE=$SERVER_IMAGE"
+          echo "DB_IMAGE=$DB_IMAGE"
+
+          [[ -n "$SERVER_IMAGE" ]] || {
+            echo "SERVER_IMAGE output is empty."
+            exit 1
+          }
+
+          [[ -n "$DB_IMAGE" ]] || {
+            echo "DB_IMAGE output is empty."
+            exit 1
+          }
+
+      - name: Docker Hub login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Build and push server image
         uses: docker/build-push-action@v6
@@ -130,7 +145,8 @@ jobs:
 
     if: ${{
         inputs.environments != 'dev' &&
-        inputs.security_scans == true
+        inputs.security_scans == true &&
+        needs.docker_build.result == 'success'
       }}
 
     steps:
