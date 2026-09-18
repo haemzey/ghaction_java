@@ -129,6 +129,7 @@ jobs:
           file: ./server/Dockerfile
           tags: ${{ steps.images.outputs.server_image }}
           push: true
+          load: true
 
       - name: Build and push database image
         uses: docker/build-push-action@v6
@@ -137,6 +138,7 @@ jobs:
           file: ./db/Dockerfile
           tags: ${{ steps.images.outputs.db_image }}
           push: true
+          load: true
 
   docker_security:
     name: Security Scans
