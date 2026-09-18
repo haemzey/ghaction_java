@@ -87,13 +87,21 @@ jobs:
           id: tag_2
           run: echo "DB_TAG=v${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
+        - id: image_1
+          run: echo "SERVER_IMAGE=${{ secrets.DOCKER_USERNAME }}/${{ env.SERVER_IMAGE }}:${{ steps.tag_1.outputs.SERVER_TAG }}" >> "$GITHUB_OUTPUT"
+        - run: echo "${{ steps.image_1.outputs.SERVER_IMAGE }}"
+
+        - id: image_2
+          run: echo "DB_IMAGE=${{ secrets.DOCKER_USERNAME }}/${{ env.DB_IMAGE }}:${{ steps.tag_2.outputs.DB_TAG }}" >> "$GITHUB_OUTPUT"
+        - run: echo "${{ steps.image_2.outputs.DB_IMAGE }}"
+
         - name: docker build for server
           uses: docker/build-push-action@v7
           with:
               context: ./server
               file: ./server/Dockerfile
            #  no-cache: true
-              tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.SERVER_IMAGE }}:${{ steps.tag_1.outputs.SERVER_TAG }}
+              tags: ${{ steps.image_1.outputs.SERVER_IMAGE }}
               push: false
               load: true
 
@@ -103,17 +111,9 @@ jobs:
               context: ./db
               file: ./db/Dockerfile
            #  no-cache: true
-              tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.DB_IMAGE }}:${{ steps.tag_2.outputs.DB_TAG }}
+              tags: ${{ steps.image_1.outputs.DB_IMAGE }}
               push: false
-              load: true
-
-        - id: image_1
-          run: echo "SERVER_IMAGE=${{ secrets.DOCKER_USERNAME }}/${{ env.SERVER_IMAGE }}:${{ steps.tag_1.outputs.SERVER_TAG }}" >> "$GITHUB_OUTPUT"
-        - run: echo "${{ steps.image_1.outputs.SERVER_IMAGE }}"
-
-        - id: image_2
-          run: echo "DB_IMAGE=${{ secrets.DOCKER_USERNAME }}/${{ env.DB_IMAGE }}:${{ steps.tag_2.outputs.DB_TAG }}" >> "$GITHUB_OUTPUT"
-        - run: echo "${{ steps.image_2.outputs.DB_IMAGE }}"
+              load: true       
     
     flask_docker_security:
        needs: flask_docker_build
