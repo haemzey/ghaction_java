@@ -28,13 +28,13 @@ permissions:
   contents: read
   pull-requests: read
 
+  
 jobs:
     deploy:
         uses: ./.github/workflows/output-reuse-workflow.yaml
         with:
             application_name: ghaction_java
             replicas: 5
-            
     production:
       needs: deploy
       runs-on: ubuntu-latest
