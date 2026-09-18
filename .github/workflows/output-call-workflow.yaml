@@ -29,16 +29,22 @@ permissions:
   pull-requests: read
 
 jobs:
-    #deploy:
-        #uses: ./.github/workflows/output-reuse-workflow.yaml
-        #with:
-        #    application_name: ghaction_java
-        #    replicas: 5
+    deploy:
+        uses: ./.github/workflows/output-reuse-workflow.yaml
+        with:
+            application_name: ghaction_java
+            replicas: 5
             
     production:
-    #  needs: deploy
+      needs: deploy
       runs-on: ubuntu-latest
-      steps:
+      steps: 
+          
+            - name: server image
+              run: ${{ needs.deploy.outputs.SERVER_IMAGE }}
+
+            - name: db image
+              run: ${{ needs.deploy.outputs.DB_IMAGE }}
             - run: echo "========PRODUCTION START========"
 
             - name: Login to ECR
